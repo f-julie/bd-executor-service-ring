@@ -1,6 +1,10 @@
 package com.amazon.ata.executorservice.checker;
 
+import com.amazon.ata.executorservice.coralgenerated.devicecommunication.GetDeviceSystemInfoRequest;
+import com.amazon.ata.executorservice.coralgenerated.devicecommunication.GetDeviceSystemInfoResponse;
+import com.amazon.ata.executorservice.coralgenerated.devicecommunication.RingDeviceFirmwareVersion;
 import com.amazon.ata.executorservice.devicecommunication.RingDeviceCommunicatorService;
+import com.amazon.ata.executorservice.util.KnownRingDeviceFirmwareVersions;
 
 /**
  * A task to check a single device's version against a desired latest
@@ -8,9 +12,11 @@ import com.amazon.ata.executorservice.devicecommunication.RingDeviceCommunicator
  *
  * PARTICIPANTS: Implement this class in Phase 1
  */
-public class DeviceCheckTask {
+public class DeviceCheckTask implements Runnable {
     private RingDeviceCommunicatorService ringDeviceCommunicatorService;
     private DeviceChecker deviceChecker;
+    private String deviceId;
+    private RingDeviceFirmwareVersion targetVersion;
 
     /**
      * Constructs a DeviceCheckTask with the given dependencies and parameters.
@@ -20,8 +26,24 @@ public class DeviceCheckTask {
      *
      * @param deviceChecker The DeviceChecker to use while executing this task
      */
-    public DeviceCheckTask(DeviceChecker deviceChecker) {
+    public DeviceCheckTask(DeviceChecker deviceChecker, String deviceId, RingDeviceFirmwareVersion targetVersion) {
         this.ringDeviceCommunicatorService = deviceChecker.getRingDeviceCommunicatorService();
         this.deviceChecker = deviceChecker;
+        this.deviceId = deviceId;
+        this.targetVersion = targetVersion;
+    }
+
+    @Override
+    public void run() {
+        // get device's firmware version
+        GetDeviceSystemInfoRequest request = GetDeviceSystemInfoRequest.builder().withDeviceId(this.deviceId).build();
+        GetDeviceSystemInfoResponse response = this.ringDeviceCommunicatorService.getDeviceSystemInfo(request);
+        RingDeviceFirmwareVersion firmwareVersion = response.getSystemInfo().getDeviceFirmwareVersion();
+        // decide if it is out of date
+        if (KnownRingDeviceFirmwareVersions.needsUpdate(firmwareVersion, this.targetVersion)) {
+            // update device
+            this.deviceChecker.updateDevice(this.deviceId, this.targetVersion);
+
+        }
     }
 }
